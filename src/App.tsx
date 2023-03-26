@@ -8,15 +8,21 @@ interface ExpenseDetail {
   rent: number;
   education: number;
 }
-type Expense = {
+interface Expense {
   month: string;
   husband: ExpenseDetail;
   wife: ExpenseDetail;
-};
+}
 
-type ExpenseFormProps = {
-  onSubmit: (expense: Expense) => void;
-  month: string;
+const t: { [key: string]: string } = {
+  husband: "夫",
+  wife: "妻",
+  food: "食費",
+  communication: "通信費",
+  water: "水道費",
+  gasElectric: "ガス電気",
+  rent: "家賃",
+  education: "教育費",
 };
 
 const getInitialExpenseDetail = (): ExpenseDetail => ({
@@ -33,8 +39,42 @@ const getCurrentMonth = () => {
   return `${date.getFullYear()}-${("0" + (date.getMonth() + 1)).slice(-2)}`;
 };
 
+const getFormattedMonths = () => {
+  const startYear = 2023;
+  const startMonth = 1;
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth() + 1;
+  let year = startYear;
+  let month = startMonth;
+  const formattedMonths: string[] = [];
+
+  while (
+    year < currentYear ||
+    (year === currentYear && month <= currentMonth)
+  ) {
+    const formattedMonth = `${year}-${month.toString().padStart(2, "0")}`;
+    formattedMonths.push(formattedMonth);
+
+    month++;
+    if (month > 12) {
+      month = 1;
+      year++;
+    }
+  }
+
+  return formattedMonths;
+};
+
 const getExpenseDetailSum = (expenseDetail: ExpenseDetail) =>
   Object.values(expenseDetail).reduce((a, b) => a + b, 0);
+
+const formatJapaneseYen = (amount: number): string => {
+  const formatter = new Intl.NumberFormat("ja-JP", {
+    style: "currency",
+    currency: "JPY",
+  });
+  return formatter.format(amount);
+};
 
 const renderExpenses = (
   role: "husband" | "wife",
@@ -46,43 +86,66 @@ const renderExpenses = (
       ) => void)
     | null
 ) => (
-  <div className="bg-gray-100 p-4">
-    <h3 className="text-lg font-bold mb-2">
-      {role.charAt(0).toUpperCase() + role.slice(1)}
-    </h3>
+  <div className="w-full">
+    <h3 className="text-lg font-bold mb-2">{t[role]}</h3>
     {Object.keys(expenses).map((key) => (
-      <div key={key} className="flex items-center mb-2">
+      <div key={key} className="mt-4">
         <label
           htmlFor={`${role}-${key}`}
-          className="mr-2 font-medium text-gray-700"
+          className="text-left block text-sm font-medium leading-6 text-gray-900"
         >
-          {key}:
+          {t[key]}:
         </label>
-        <input
-          type="number"
-          id={`${role}-${key}`}
-          value={expenses[key as keyof typeof expenses]}
-          disabled={!handleChange}
-          onChange={(event) =>
-            handleChange && handleChange(event, key as keyof typeof expenses)
-          }
-          className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm disabled:opacity-90 disabled:cursor-not-allowed"
-        />
+        <div className="relative mt-1 rounded-md shadow-sm">
+          <input
+            type="number"
+            id={`${role}-${key}`}
+            value={expenses[key as keyof typeof expenses]}
+            disabled={!handleChange}
+            onChange={(event) =>
+              handleChange && handleChange(event, key as keyof typeof expenses)
+            }
+            className="block w-full rounded-md text-right border-0 py-1.5 pr-12 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
+          />
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+            <span className="text-gray-500 sm:text-sm">円</span>
+          </div>
+        </div>
       </div>
     ))}
   </div>
 );
 
-const ExpenseForm: React.FC<ExpenseFormProps> = ({ onSubmit, month }) => {
+const ExpenseForm: React.FC<{
+  expenses: Expense[];
+  onSubmit: (expense: Expense) => void;
+  selectedMonth: string;
+  handleMonthSelect: (event: React.ChangeEvent<HTMLSelectElement>) => void;
+}> = ({ expenses, onSubmit, selectedMonth, handleMonthSelect }) => {
   const [husbandExpenses, setHusbandExpenses] = useState(
     getInitialExpenseDetail()
   );
 
   const [wifeExpenses, setWifeExpenses] = useState(getInitialExpenseDetail());
 
+  useEffect(() => {
+    const expense = expenses.find((e) => e.month === selectedMonth);
+    if (expense) {
+      setHusbandExpenses(expense.husband);
+      setWifeExpenses(expense.wife);
+    } else {
+      setHusbandExpenses(getInitialExpenseDetail());
+      setWifeExpenses(getInitialExpenseDetail());
+    }
+  }, [selectedMonth, expenses]);
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSubmit({ month, husband: husbandExpenses, wife: wifeExpenses });
+    onSubmit({
+      month: selectedMonth,
+      husband: husbandExpenses,
+      wife: wifeExpenses,
+    });
   };
 
   const handleExpenseChange = (
@@ -98,8 +161,30 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ onSubmit, month }) => {
 
   return (
     <form onSubmit={handleSubmit}>
-      <h2 className="text-xl font-bold">Enter expenses for {month}</h2>
-      <div>
+      <h2 className="text-xl font-bold">
+        <select
+          id="month-select"
+          value={selectedMonth}
+          onChange={handleMonthSelect}
+          className="border-gray-300 mr-1 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+        >
+          {getFormattedMonths().map((month) => (
+            <option key={month} value={month}>
+              {month}
+            </option>
+          ))}
+        </select>
+        の精算
+      </h2>
+
+      <Reimbursement
+        expense={{
+          month: selectedMonth,
+          husband: husbandExpenses,
+          wife: wifeExpenses,
+        }}
+      />
+      <div className="flex justify-center items-center my-4">
         {renderExpenses("husband", husbandExpenses, (event, field) =>
           handleExpenseChange("husband", event, field)
         )}
@@ -108,10 +193,10 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ onSubmit, month }) => {
         )}
       </div>
       <button
-        className="bg-blue-500 text-white font-bold py-2 px-4 rounded"
+        className="mt-5 bg-blue-500 text-white font-bold py-2 px-4 rounded"
         type="submit"
       >
-        Submit Expenses
+        費用を登録する
       </button>
     </form>
   );
@@ -119,53 +204,160 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ onSubmit, month }) => {
 
 const PastExpenses: React.FC<{
   expenses: Expense[];
-  selectedMonth: string;
-  handleMonthSelect: (event: React.ChangeEvent<HTMLSelectElement>) => void;
-  selectedExpense: Expense | undefined;
-}> = ({ expenses, selectedMonth, handleMonthSelect, selectedExpense }) => {
+  setSelectedMonth: (month: string) => void;
+}> = ({ expenses, setSelectedMonth }) => {
+  if (expenses.length === 0) return null;
   return (
-    <div className="mt-10">
-      <div className="flex justify-center items-center mb-4">
-        <label
-          htmlFor="month-select"
-          className="mr-2 font-medium text-gray-700"
-        >
-          Select month to view past expenses:
-        </label>
-
-        <select
-          id="month-select"
-          value={selectedMonth}
-          onChange={handleMonthSelect}
-          className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
-        >
-          {expenses.map((expense, index) => (
-            <option key={index} value={expense.month}>
-              {expense.month}
-            </option>
-          ))}
-        </select>
-      </div>
-      {/* Display past expenses */}
-      {selectedExpense && (
-        <div className="bg-gray-100 p-4">
-          <h3 className="text-lg font-bold mb-2">
-            Expenses for {selectedExpense.month}
-          </h3>
-          <div className="mt-4 flex justify-evenly items-center">
-            {renderExpenses("husband", selectedExpense.husband, null)}
-            {renderExpenses("wife", selectedExpense.wife, null)}
+    <>
+      <h2 className="text-xl font-bold">過去の精算</h2>
+      <div className="mt-8 flow-root">
+        <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
+          <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+            <table className="min-w-full">
+              <thead className="bg-white">
+                <tr>
+                  <th
+                    scope="col"
+                    className="w-20 text-center py-3.5 pl-4 pr-3 text-sm font-semibold text-gray-900 sm:pl-3"
+                  ></th>
+                  <th
+                    scope="col"
+                    className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-3"
+                  >
+                    {t.food}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                  >
+                    {t.communication}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                  >
+                    {t.water}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                  >
+                    {t.gasElectric}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                  >
+                    {t.rent}
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                  >
+                    {t.education}
+                  </th>
+                  <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-3">
+                    <span className="sr-only">Edit</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {expenses.map((expense) => (
+                  <React.Fragment key={expense.month}>
+                    <tr className="border-t border-gray-200">
+                      <th
+                        colSpan={7}
+                        scope="colgroup"
+                        className="bg-gray-50 py-2 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-3"
+                      >
+                        <div className="flex">
+                          <div>
+                            {expense.month}(合計:
+                            {getExpenseDetailSum(expense.husband) +
+                              getExpenseDetailSum(expense.wife)}
+                            円)
+                          </div>
+                        </div>
+                      </th>
+                      <th
+                        colSpan={1}
+                        scope="colgroup"
+                        className="bg-gray-50 py-2 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-3"
+                      >
+                        <div className="flex">
+                          <a
+                            href="#"
+                            onClick={() => setSelectedMonth(expense.month)}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            編集
+                          </a>
+                        </div>
+                      </th>
+                    </tr>
+                    <tr className="border-gray-200 border-t">
+                      <td className="w-20 whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-3">
+                        {t.husband}
+                      </td>
+                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm text-gray-900 sm:pl-3">
+                        {formatJapaneseYen(expense.husband.food)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.husband.communication)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.husband.water)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.husband.gasElectric)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.husband.rent)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.husband.education)}円
+                      </td>
+                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-3"></td>
+                    </tr>
+                    <tr className="border-gray-200 border-t">
+                      <td className="w-20 whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-3">
+                        {t.wife}
+                      </td>
+                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm text-gray-900 sm:pl-3">
+                        {formatJapaneseYen(expense.wife.food)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.wife.communication)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.wife.water)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.wife.gasElectric)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.wife.rent)}円
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {formatJapaneseYen(expense.wife.education)}円
+                      </td>
+                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-3"></td>
+                    </tr>
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    </>
   );
 };
 
-const Reimbursement: React.FC<{ selectedExpense: Expense | undefined }> = ({
-  selectedExpense,
+const Reimbursement: React.FC<{ expense: Expense | undefined }> = ({
+  expense,
 }) => {
-  if (!selectedExpense) return null;
+  if (!expense) return null;
 
   const calculateReimbursement = (
     husbandExpenses: number,
@@ -174,32 +366,34 @@ const Reimbursement: React.FC<{ selectedExpense: Expense | undefined }> = ({
     return Math.abs(husbandExpenses - wifeExpenses);
   };
 
-  const reimbursement = selectedExpense
+  const reimbursement = expense
     ? calculateReimbursement(
-        getExpenseDetailSum(selectedExpense.husband),
-        getExpenseDetailSum(selectedExpense.wife)
+        getExpenseDetailSum(expense.husband),
+        getExpenseDetailSum(expense.wife)
       )
     : 0;
 
   const isPaidMoreHusband =
-    getExpenseDetailSum(selectedExpense.husband) >
-    getExpenseDetailSum(selectedExpense.wife);
+    getExpenseDetailSum(expense.husband) > getExpenseDetailSum(expense.wife);
 
   return (
-    <div className="bg-gray-100 p-4">
-      <h3 className="text-lg font-bold mb-2">Reimbursement:</h3>
+    <div className="bg-gray-100 p-4 mt-4">
+      <h3 className="text-lg font-bold mb-2">払い戻し:</h3>
       {reimbursement > 0 ? (
         <p className="text-gray-700">
-          To balance expenses,{" "}
-          <span className="font-medium">
-            {isPaidMoreHusband ? "wife" : "husband"}
+          経費のバランスを取るため、{" "}
+          <strong>
+            {isPaidMoreHusband ? t.wife : t.husband}は
+            {!isPaidMoreHusband ? t.wife : t.husband}
+          </strong>{" "}
+          に
+          <span className="font-medium text-blue-500">
+            {formatJapaneseYen(reimbursement)}円
           </span>{" "}
-          should give{" "}
-          <span className="font-medium text-indigo-500">¥{reimbursement}</span>{" "}
-          to {!isPaidMoreHusband ? "wife" : "husband"}.
+          を渡すこと。
         </p>
       ) : (
-        <p className="text-gray-700">Expenses are already balanced.</p>
+        <p className="text-gray-700">支出を調整する必要はありません</p>
       )}
     </div>
   );
@@ -207,52 +401,45 @@ const Reimbursement: React.FC<{ selectedExpense: Expense | undefined }> = ({
 
 const ExpenseCalculator = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [month, setMonth] = useState(getCurrentMonth());
-  const [selectedMonth, setSelectedMonth] = useState(month);
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
 
   useEffect(() => {
-    // Load expenses from local storage or fetch from firestore in the future
     const loadedExpenses = localStorage.getItem("expenses");
     if (loadedExpenses) {
       setExpenses(JSON.parse(loadedExpenses));
     }
-    // Set current month
-    setMonth(getCurrentMonth());
+    setSelectedMonth(getCurrentMonth());
   }, []);
 
   useEffect(() => {
-    // Save expenses to local storage
+    if (!expenses.length) return;
     localStorage.setItem("expenses", JSON.stringify(expenses));
   }, [expenses]);
 
   const addExpense = (newExpense: Expense) => {
-    setExpenses([...expenses, newExpense]);
-  };
+    const target = expenses.find((e) => e.month === newExpense.month);
+    const newExpenses = target
+      ? expenses.map((e) => (e.month === newExpense.month ? newExpense : e))
+      : [...expenses, newExpense];
 
-  const getMonthlyExpense = (expenses: Expense[], selectedMonth: string) =>
-    expenses.find((expense) => expense.month === selectedMonth);
+    setExpenses(newExpenses);
+  };
 
   const handleMonthSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedMonth(event.target.value);
   };
 
-  const selectedExpense = getMonthlyExpense(expenses, selectedMonth);
-
-  // Render form and display components here
   return (
     <div className="bg-white py-24 px-6 sm:py-32 lg:px-8">
       <div className="mx-auto max-w-2xl text-center">
-        {/* Render form to input expenses for husband and wife */}
-        <ExpenseForm onSubmit={addExpense} month={month} />
-        {/* Render list of months to select and view past expenses */}
-        <PastExpenses
+        <ExpenseForm
           expenses={expenses}
+          onSubmit={addExpense}
           selectedMonth={selectedMonth}
           handleMonthSelect={handleMonthSelect}
-          selectedExpense={selectedExpense}
         />
-        {/* Display reimbursement calculation result */}
-        <Reimbursement selectedExpense={selectedExpense} />
+        <hr className="my-10" />
+        <PastExpenses expenses={expenses} setSelectedMonth={setSelectedMonth} />
       </div>
     </div>
   );
