@@ -39,23 +39,34 @@ const getExpenseDetailSum = (expenseDetail: ExpenseDetail) =>
 const renderExpenses = (
   role: "husband" | "wife",
   expenses: ExpenseDetail,
-  handleChange: (
-    event: React.ChangeEvent<HTMLInputElement>,
-    field: keyof ExpenseDetail
-  ) => void
+  handleChange:
+    | ((
+        event: React.ChangeEvent<HTMLInputElement>,
+        field: keyof ExpenseDetail
+      ) => void)
+    | null
 ) => (
-  <div>
-    <h3>{role.charAt(0).toUpperCase() + role.slice(1)}</h3>
+  <div className="bg-gray-100 p-4">
+    <h3 className="text-lg font-bold mb-2">
+      {role.charAt(0).toUpperCase() + role.slice(1)}
+    </h3>
     {Object.keys(expenses).map((key) => (
-      <div key={key}>
-        <label htmlFor={`${role}-${key}`}>{key}: </label>
+      <div key={key} className="flex items-center mb-2">
+        <label
+          htmlFor={`${role}-${key}`}
+          className="mr-2 font-medium text-gray-700"
+        >
+          {key}:
+        </label>
         <input
           type="number"
           id={`${role}-${key}`}
           value={expenses[key as keyof typeof expenses]}
+          disabled={!handleChange}
           onChange={(event) =>
-            handleChange(event, key as keyof typeof expenses)
+            handleChange && handleChange(event, key as keyof typeof expenses)
           }
+          className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm disabled:opacity-90 disabled:cursor-not-allowed"
         />
       </div>
     ))}
@@ -74,33 +85,34 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({ onSubmit, month }) => {
     onSubmit({ month, husband: husbandExpenses, wife: wifeExpenses });
   };
 
-  const handleHusbandExpenseChange = (
+  const handleExpenseChange = (
+    role: "husband" | "wife",
     event: React.ChangeEvent<HTMLInputElement>,
     field: keyof typeof husbandExpenses
   ) => {
-    setHusbandExpenses({
-      ...husbandExpenses,
-      [field]: Number(event.target.value),
-    });
-  };
-
-  const handleWifeExpenseChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-    field: keyof typeof wifeExpenses
-  ) => {
-    setWifeExpenses({ ...wifeExpenses, [field]: Number(event.target.value) });
+    const updateExpenses =
+      role === "husband" ? setHusbandExpenses : setWifeExpenses;
+    const currentExpenses = role === "husband" ? husbandExpenses : wifeExpenses;
+    updateExpenses({ ...currentExpenses, [field]: Number(event.target.value) });
   };
 
   return (
     <form onSubmit={handleSubmit}>
-      <h2 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-        Enter expenses for {month}
-      </h2>
+      <h2 className="text-xl font-bold">Enter expenses for {month}</h2>
       <div>
-        {renderExpenses("husband", husbandExpenses, handleHusbandExpenseChange)}
-        {renderExpenses("wife", wifeExpenses, handleWifeExpenseChange)}
+        {renderExpenses("husband", husbandExpenses, (event, field) =>
+          handleExpenseChange("husband", event, field)
+        )}
+        {renderExpenses("wife", wifeExpenses, (event, field) =>
+          handleExpenseChange("wife", event, field)
+        )}
       </div>
-      <button type="submit">Submit Expenses</button>
+      <button
+        className="bg-blue-500 text-white font-bold py-2 px-4 rounded"
+        type="submit"
+      >
+        Submit Expenses
+      </button>
     </form>
   );
 };
@@ -112,16 +124,20 @@ const PastExpenses: React.FC<{
   selectedExpense: Expense | undefined;
 }> = ({ expenses, selectedMonth, handleMonthSelect, selectedExpense }) => {
   return (
-    <>
-      <div>
-        <label htmlFor="month-select">
-          Select month to view past expenses:{" "}
+    <div className="mt-10">
+      <div className="flex justify-center items-center mb-4">
+        <label
+          htmlFor="month-select"
+          className="mr-2 font-medium text-gray-700"
+        >
+          Select month to view past expenses:
         </label>
 
         <select
           id="month-select"
           value={selectedMonth}
           onChange={handleMonthSelect}
+          className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
         >
           {expenses.map((expense, index) => (
             <option key={index} value={expense.month}>
@@ -132,32 +148,25 @@ const PastExpenses: React.FC<{
       </div>
       {/* Display past expenses */}
       {selectedExpense && (
-        <div>
-          <h3>Expenses for {selectedExpense.month}</h3>
-          {[
-            ["Husband", selectedExpense.husband],
-            ["Wife", selectedExpense.wife],
-          ].map(([title, expense]) => (
-            <div>
-              <h4>{title as string}</h4>
-              <ul>
-                {Object.entries(expense).map(([key, value]) => (
-                  <li key={key}>
-                    {key}: {value}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <div className="bg-gray-100 p-4">
+          <h3 className="text-lg font-bold mb-2">
+            Expenses for {selectedExpense.month}
+          </h3>
+          <div className="mt-4 flex justify-evenly items-center">
+            {renderExpenses("husband", selectedExpense.husband, null)}
+            {renderExpenses("wife", selectedExpense.wife, null)}
+          </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
 const Reimbursement: React.FC<{ selectedExpense: Expense | undefined }> = ({
   selectedExpense,
 }) => {
+  if (!selectedExpense) return null;
+
   const calculateReimbursement = (
     husbandExpenses: number,
     wifeExpenses: number
@@ -171,17 +180,27 @@ const Reimbursement: React.FC<{ selectedExpense: Expense | undefined }> = ({
         getExpenseDetailSum(selectedExpense.wife)
       )
     : 0;
+
+  const isPaidMoreHusband =
+    getExpenseDetailSum(selectedExpense.husband) >
+    getExpenseDetailSum(selectedExpense.wife);
+
   return (
-    <div>
-      <h3>Reimbursement:</h3>
-      {selectedExpense && reimbursement > 0
-        ? `To balance expenses, ${
-            getExpenseDetailSum(selectedExpense.husband) >
-            getExpenseDetailSum(selectedExpense.wife)
-              ? "husband"
-              : "wife"
-          } should give ¥${reimbursement} to the other.`
-        : "Expenses are already balanced."}
+    <div className="bg-gray-100 p-4">
+      <h3 className="text-lg font-bold mb-2">Reimbursement:</h3>
+      {reimbursement > 0 ? (
+        <p className="text-gray-700">
+          To balance expenses,{" "}
+          <span className="font-medium">
+            {isPaidMoreHusband ? "wife" : "husband"}
+          </span>{" "}
+          should give{" "}
+          <span className="font-medium text-indigo-500">¥{reimbursement}</span>{" "}
+          to {!isPaidMoreHusband ? "wife" : "husband"}.
+        </p>
+      ) : (
+        <p className="text-gray-700">Expenses are already balanced.</p>
+      )}
     </div>
   );
 };
@@ -210,9 +229,8 @@ const ExpenseCalculator = () => {
     setExpenses([...expenses, newExpense]);
   };
 
-  const getMonthlyExpense = (expenses: Expense[], selectedMonth: string) => {
-    return expenses.find((expense) => expense.month === selectedMonth);
-  };
+  const getMonthlyExpense = (expenses: Expense[], selectedMonth: string) =>
+    expenses.find((expense) => expense.month === selectedMonth);
 
   const handleMonthSelect = (event: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedMonth(event.target.value);
