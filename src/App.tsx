@@ -207,6 +207,13 @@ const PastExpenses: React.FC<{
   setSelectedMonth: (month: string) => void;
 }> = ({ expenses, setSelectedMonth }) => {
   if (expenses.length === 0) return null;
+
+  const sortedExpenses = expenses.sort((a, b) => {
+    if (a.month < b.month) return 1;
+    if (a.month > b.month) return -1;
+    return 0;
+  });
+
   return (
     <>
       <h2 className="text-xl font-bold">過去の精算</h2>
@@ -262,7 +269,7 @@ const PastExpenses: React.FC<{
                 </tr>
               </thead>
               <tbody className="bg-white">
-                {expenses.map((expense) => (
+                {sortedExpenses.map((expense) => (
                   <React.Fragment key={expense.month}>
                     <tr className="border-t border-gray-200">
                       <th
